@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skill Chess: AGI Dawn</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+        }
+
+        .game-header {
+            text-align: center;
+            padding: 5px 0;
+            flex-shrink: 0;
+        }
+
+        .game-title {
+            font-size: 28px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 6px;
+            color: #00ffff;
+            text-shadow:
+                0 0 5px #00ffff,
+                0 0 10px #00ffff,
+                0 0 20px #00ffff,
+                0 0 40px #00ffff,
+                0 0 80px #00ffff;
+            animation: neonPulse 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes neonPulse {
+            from {
+                text-shadow: 
+                    0 0 5px #00ffff,
+                    0 0 10px #00ffff,
+                    0 0 20px #00ffff,
+                    0 0 40px #00ffff,
+                    0 0 80px #00ffff;
+            }
+            to {
+                text-shadow: 
+                    0 0 10px #00ffff,
+                    0 0 20px #00ffff,
+                    0 0 40px #00ffff,
+                    0 0 80px #00ffff,
+                    0 0 120px #00ffff,
+                    0 0 160px #00ffff;
+            }
+        }
+
+        .game-container {
+            display: flex;
+            width: 100%;
+            flex: 1;
+            max-width: 1800px;
+            gap: 15px;
+            padding: 10px 20px 15px 20px;
+            min-height: 0;
+        }
+
+        .board-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-width: 0;
+        }
+
+        .chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: min(65vh, 65vw);
+            height: min(65vh, 65vw);
+            aspect-ratio: 1/1;
+            border: 3px solid #00ffff;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3), inset 0 0 20px rgba(0, 255, 255, 0.1);
+        }
+
+        .square {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: min(7.5vw, 6.5vh);
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+            aspect-ratio: 1/1;
+        }
+
+        .square.light {
+            background: linear-gradient(135deg, #2a2a4a 0%, #1a1a3a 100%);
+        }
+
+        .square.dark {
+            background: linear-gradient(135deg, #1a1a2e 0%, #0a0a1e 100%);
+        }
+
+        .square:hover {
+            filter: brightness(1.3);
+        }
+
+        .square.selected {
+            box-shadow: inset 0 0 20px rgba(255, 215, 0, 0.8);
+            background: rgba(255, 215, 0, 0.3) !important;
+        }
+
+        .square.valid-move {
+            box-shadow: inset 0 0 15px rgba(0, 255, 0, 0.6);
+            background: rgba(0, 255, 0, 0.2) !important;
+        }
+
+        .square.valid-capture {
+            box-shadow: inset 0 0 15px rgba(255, 0, 0, 0.8);
+            background: rgba(255, 0, 0, 0.3) !important;
+        }
+
+        .square.layoff-highlight {
+            background: rgba(255, 0, 0, 0.4) !important;
+            border: 2px solid #ff0000;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.6);
+        }
+
+        .square.fsd-teleport {
+            background: rgba(0, 100, 255, 0.4) !important;
+            border: 2px solid #0064ff;
+            box-shadow: 0 0 20px rgba(0, 100, 255, 0.6);
+        }
+
+        .square.hallucination-target {
+            background: rgba(255, 0, 255, 0.4) !important;
+            border: 2px solid #ff00ff;
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.6);
+            animation: hallucinate 0.5s ease-in-out infinite;
+        }
+
+        .square.hallucinated {
+            animation: hallucinate 1s ease-in-out infinite;
+        }
+
+        @keyframes hallucinate {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(0.95); }
+        }
+
+        .piece {
+            text-shadow: 0 0 10px currentColor;
+            user-select: none;
+        }
+
+        .piece.white {
+            color: #ffd700;
+            filter: drop-shadow(0 0 5px #ffd700);
+        }
+
+        .piece.black {
+            color: #9b59b6;
+            filter: drop-shadow(0 0 5px #9b59b6);
+        }
+
+        .piece.hallucinated {
+            color: #ff00ff !important;
+            filter: drop-shadow(0 0 8px #ff00ff);
+        }
+
+        .right-panel {
+            width: 360px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 0;
+            max-height: 100%;
+            overflow: hidden;
+        }
+
+        .panel-section {
+            background: rgba(26, 26, 46, 0.9);
+            border: 2px solid #00ffff;
+            border-radius: 8px;
+            padding: 10px 12px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+        }
+
+        .panel-title {
+            font-size: 11px;
+            color: #00ffff;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #00ffff;
+            padding-bottom: 3px;
+        }
+
+        .energy-bar-container {
+            width: 100%;
+            height: 24px;
+            background: #1a1a2e;
+            border: 2px solid #ffd700;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .energy-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #ffd700, #ffaa00);
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        .energy-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 5px #000;
+        }
+
+        .skill-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .skill-btn {
+            padding: 8px 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            border: 2px solid;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: left;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .skill-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .skill-btn.layoff {
+            border-color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+            color: #ff4444;
+        }
+
+        .skill-btn.layoff:hover:not(:disabled) {
+            background: rgba(255, 68, 68, 0.3);
+            box-shadow: 0 0 20px rgba(255, 68, 68, 0.5);
+        }
+
+        .skill-btn.layoff.active {
+            background: rgba(255, 68, 68, 0.5);
+            box-shadow: 0 0 30px rgba(255, 68, 68, 0.8);
+            animation: pulse 1s infinite;
+        }
+
+        .skill-btn.fsd {
+            border-color: #00aaff;
+            background: rgba(0, 170, 255, 0.1);
+            color: #00aaff;
+        }
+
+        .skill-btn.fsd:hover:not(:disabled) {
+            background: rgba(0, 170, 255, 0.3);
+            box-shadow: 0 0 20px rgba(0, 170, 255, 0.5);
+        }
+
+        .skill-btn.fsd.active {
+            background: rgba(0, 170, 255, 0.5);
+            box-shadow: 0 0 30px rgba(0, 170, 255, 0.8);
+            animation: pulse 1s infinite;
+        }
+
+        .skill-btn.hallucination {
+            border-color: #ff00ff;
+            background: rgba(255, 0, 255, 0.1);
+            color: #ff00ff;
+        }
+
+        .skill-btn.hallucination:hover:not(:disabled) {
+            background: rgba(255, 0, 255, 0.3);
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+        }
+
+        .skill-btn.hallucination.active {
+            background: rgba(255, 0, 255, 0.5);
+            box-shadow: 0 0 30px rgba(255, 0, 255, 0.8);
+            animation: pulse 1s infinite;
+        }
+
+        .skill-btn.gpu {
+            border-color: #44ff44;
+            background: rgba(68, 255, 68, 0.1);
+            color: #44ff44;
+        }
+
+        .skill-btn.gpu:hover:not(:disabled) {
+            background: rgba(68, 255, 68, 0.3);
+            box-shadow: 0 0 20px rgba(68, 255, 68, 0.5);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        .skill-cost {
+            float: right;
+            font-weight: bold;
+        }
+
+        .instruction-box {
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #00ffff;
+            border-radius: 6px;
+            padding: 10px 12px;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 12px;
+            color: #00ffff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(0, 255, 255, 0.3); }
+            50% { box-shadow: 0 0 25px rgba(0, 255, 255, 0.6); }
+        }
+
+        .x-feed {
+            flex: 1;
+            background: rgba(26, 26, 46, 0.9);
+            border: 2px solid #00ffff;
+            border-radius: 8px;
+            padding: 10px 12px;
+            overflow-y: auto;
+            min-height: 100px;
+            max-height: 250px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+        }
+
+        .x-feed::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .x-feed::-webkit-scrollbar-track {
+            background: #1a1a2e;
+        }
+
+        .x-feed::-webkit-scrollbar-thumb {
+            background: #00ffff;
+            border-radius: 4px;
+        }
+
+        .feed-item {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+            font-size: 11px;
+            color: #b0b0b0;
+            line-height: 1.3;
+        }
+
+        .feed-item:last-child {
+            border-bottom: none;
+        }
+
+        .feed-item.player {
+            color: #ffd700;
+        }
+
+        .feed-item.ai {
+            color: #9b59b6;
+        }
+
+        .feed-item.skill {
+            color: #ff4444;
+            font-weight: bold;
+        }
+
+        .controls-section {
+            display: flex;
+            gap: 8px;
+        }
+
+        .restart-btn {
+            flex: 1;
+            padding: 10px 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            background: linear-gradient(135deg, #ff4444, #ff6666);
+            border: 2px solid #ff4444;
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .restart-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(255, 68, 68, 0.6);
+        }
+
+        .game-over-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .game-over-overlay.show {
+            display: flex;
+        }
+
+        .game-over-content {
+            text-align: center;
+            padding: 40px;
+            background: rgba(26, 26, 46, 0.95);
+            border: 3px solid #00ffff;
+            border-radius: 20px;
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.5);
+        }
+
+        .game-over-title {
+            font-size: 32px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .game-over-title.win {
+            color: #ffd700;
+        }
+
+        .game-over-title.lose {
+            color: #ff4444;
+        }
+
+        .restart-btn-large {
+            margin-top: 20px;
+            padding: 15px 40px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            background: linear-gradient(135deg, #00ffff, #00aaff);
+            border: none;
+            border-radius: 25px;
+            color: #000;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+
+        .restart-btn-large:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.6);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-header">
+        <div class="game-title">SKILL CHESS: AGI DAWN</div>
+    </div>
+
+    <div class="game-container">
+        <div class="board-section">
+            <div class="chessboard" id="chessboard"></div>
+        </div>
+
+        <div class="right-panel">
+            <div class="panel-section">
+                <div class="panel-title">⚡ Energy Status</div>
+                <div class="energy-bar-container">
+                    <div class="energy-bar" id="energyBar"></div>
+                    <div class="energy-text" id="energyText">0 / 10</div>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="panel-title">📋 Instructions</div>
+                <div class="instruction-box" id="instructionBox">
+                    YOUR TURN: Select a Piece
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="panel-title">🎯 Skill Menu</div>
+                <div class="skill-buttons">
+                    <button class="skill-btn layoff" id="layoffBtn" onclick="activateLayoffSkill()">
+                        <span class="skill-cost">3E</span>
+                        [3E] Layoff Storm<br>
+                        <small>Delete 2x2 area</small>
+                    </button>
+                    <button class="skill-btn fsd" id="fsdBtn" onclick="activateFSDSkill()">
+                        <span class="skill-cost">2E</span>
+                        [2E] FSD Mode<br>
+                        <small>Teleport piece</small>
+                    </button>
+                    <button class="skill-btn hallucination" id="hallucinationBtn" onclick="activateHallucinationSkill()">
+                        <span class="skill-cost">2E</span>
+                        [2E] Hallucination<br>
+                        <small>Enemy piece → Pawn (2 turns)</small>
+                    </button>
+                    <button class="skill-btn gpu" id="gpuBtn" onclick="activateGPUSkill()">
+                        <span class="skill-cost">5E</span>
+                        [5E] GPU Rental<br>
+                        <small>Extra turn</small>
+                    </button>
+                </div>
+            </div>
+
+            <div class="panel-section controls-section">
+                <button class="restart-btn" onclick="restartGame()">🔄 Restart Game</button>
+            </div>
+
+            <div class="x-feed" id="xFeed">
+                <div class="feed-item">🚀 Game initialized. Welcome to Skill Chess: AGI Dawn!</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="game-over-overlay" id="gameOverOverlay">
+        <div class="game-over-content">
+            <div class="game-over-title" id="gameOverTitle">GAME OVER</div>
+            <div id="gameOverMessage"></div>
+            <button class="restart-btn-large" onclick="restartGame()">RESTART GAME</button>
+        </div>
+    </div>
+
+    <script>
+        // Game State Constants
+        const GameState = {
+            IDLE: 'IDLE',
+            PIECE_SELECTED: 'PIECE_SELECTED',
+            SKILL_LAYOFF_PENDING: 'SKILL_LAYOFF_PENDING',
+            SKILL_FSD_SELECT_PIECE: 'SKILL_FSD_SELECT_PIECE',
+            SKILL_FSD_SELECT_TARGET: 'SKILL_FSD_SELECT_TARGET',
+            SKILL_HALLUCINATION_SELECT_TARGET: 'SKILL_HALLUCINATION_SELECT_TARGET'
+        };
+
+        // Game State Variables
+        let game = new Chess();
+        let gameState = GameState.IDLE;
+        let selectedSquare = null;
+        let playerEnergy = 0;
+        let isPlayerTurn = true;
+        let isCastingSkill = false;
+        let activeSkill = null;
+        let hallucinations = []; // Track hallucinated pieces { square, originalType, turnsRemaining }
+        let playerTurnCount = 0;
+        let hasGPURental = false; // Track if player used GPU Rental this turn
+
+        // Piece Unicode Symbols
+        const pieces = {
+            'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+            'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+        };
+
+        // Piece values for AI evaluation
+        const pieceValues = {
+            'p': 100,
+            'n': 320,
+            'b': 330,
+            'r': 500,
+            'q': 900,
+            'k': 20000
+        };
+
+        // Initialize the chessboard
+        function initializeBoard() {
+            const board = document.getElementById('chessboard');
+            board.innerHTML = '';
+
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const square = document.createElement('div');
+                    const squareName = String.fromCharCode(97 + col) + (8 - row);
+                    square.className = `square ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
+                    square.dataset.square = squareName;
+                    square.onclick = () => handleSquareClick(squareName);
+                    square.onmouseenter = () => handleSquareHover(squareName);
+                    square.onmouseleave = () => handleSquareLeave(squareName);
+                    board.appendChild(square);
+                }
+            }
+
+            renderBoard();
+        }
+
+        // Render the current board state
+        function renderBoard() {
+            const boardState = game.board();
+            const squares = document.querySelectorAll('.square');
+
+            squares.forEach(square => {
+                const squareName = square.dataset.square;
+                const col = squareName.charCodeAt(0) - 97;
+                const row = 8 - parseInt(squareName[1]);
+                const piece = boardState[row][col];
+
+                // Clear previous content and classes
+                square.innerHTML = '';
+                square.classList.remove('selected', 'valid-move', 'valid-capture', 'layoff-highlight', 'fsd-teleport', 'hallucination-target', 'hallucinated');
+
+                if (piece) {
+                    const pieceSpan = document.createElement('span');
+                    const isHallucinated = hallucinations.some(h => h.square === squareName);
+                    pieceSpan.className = `piece ${piece.color === 'w' ? 'white' : 'black'}${isHallucinated ? ' hallucinated' : ''}`;
+                    pieceSpan.textContent = pieces[piece.type];
+                    square.appendChild(pieceSpan);
+
+                    if (isHallucinated) {
+                        square.classList.add('hallucinated');
+                    }
+                }
+            });
+
+            // Highlight selected square
+            if (selectedSquare && !isCastingSkill) {
+                const selectedElement = document.querySelector(`[data-square="${selectedSquare}"]`);
+                if (selectedElement) {
+                    selectedElement.classList.add('selected');
+                }
+            }
+
+            // Highlight valid moves for selected piece
+            if (selectedSquare && gameState === GameState.PIECE_SELECTED && !isCastingSkill) {
+                const moves = game.moves({ square: selectedSquare, verbose: true });
+                moves.forEach(move => {
+                    const targetElement = document.querySelector(`[data-square="${move.to}"]`);
+                    if (targetElement) {
+                        if (move.captured) {
+                            targetElement.classList.add('valid-capture');
+                        } else {
+                            targetElement.classList.add('valid-move');
+                        }
+                    }
+                });
+            }
+
+            // Highlight hallucination targets
+            if (isCastingSkill && activeSkill === 'hallucination' && gameState === GameState.SKILL_HALLUCINATION_SELECT_TARGET) {
+                for (let row = 0; row < 8; row++) {
+                    for (let col = 0; col < 8; col++) {
+                        const squareName = String.fromCharCode(97 + col) + (8 - row);
+                        const piece = game.get(squareName);
+                        if (piece && piece.color === 'b' && ['r', 'n', 'b'].includes(piece.type)) {
+                            const element = document.querySelector(`[data-square="${squareName}"]`);
+                            if (element) {
+                                element.classList.add('hallucination-target');
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Handle square click
+        function handleSquareClick(square) {
+            console.log('=== handleSquareClick Called ===');
+            console.log('square:', square);
+            console.log('isPlayerTurn:', isPlayerTurn);
+            console.log('game.turn():', game.turn());
+            console.log('gameState:', gameState);
+            console.log('selectedSquare:', selectedSquare);
+
+            if (!isPlayerTurn || game.game_over()) {
+                console.log('Cannot handle click: not player turn or game over');
+                return;
+            }
+
+            // Skill mode handling
+            if (isCastingSkill) {
+                handleSkillClick(square);
+                return;
+            }
+
+            const piece = game.get(square);
+            console.log('Piece at', square, ':', piece);
+
+            // If clicking on own piece, select it
+            if (piece && piece.color === 'w') {
+                selectedSquare = square;
+                gameState = GameState.PIECE_SELECTED;
+                renderBoard();
+                updateInstruction('Select a destination or click another piece');
+                console.log('Selected piece:', square);
+                return;
+            }
+
+            // If piece is selected and clicking on valid move
+            if (selectedSquare && gameState === GameState.PIECE_SELECTED) {
+                console.log('Checking moves for selected square:', selectedSquare);
+                console.log('game.turn():', game.turn());
+
+                // Get moves for the selected piece
+                let moves;
+                if (game.turn() !== 'w' && isPlayerTurn) {
+                    // GPU Rental extra turn: game.turn() is black but it's still player's turn
+                    // Temporarily modify FEN to get white's moves
+                    console.log('GPU Rental extra turn: temporarily modifying FEN to get white moves');
+                    const fen = game.fen();
+                    const parts = fen.split(' ');
+                    parts[1] = 'w';
+                    game.load(parts.join(' '));
+                    moves = game.moves({ square: selectedSquare, verbose: true });
+                    // Restore FEN
+                    game.load(fen);
+                    console.log('Restored FEN after getting moves');
+                } else {
+                    moves = game.moves({ square: selectedSquare, verbose: true });
+                }
+
+                console.log('Available moves:', moves.length, moves);
+
+                const validMove = moves.find(m => m.to === square);
+
+                if (validMove) {
+                    console.log('Valid move found, calling makeMove');
+                    makeMove(selectedSquare, square);
+                } else {
+                    // Invalid move, deselect
+                    console.log('Invalid move, deselecting. Available moves:', moves.map(m => m.to));
+                    selectedSquare = null;
+                    gameState = GameState.IDLE;
+                    renderBoard();
+                    updateInstruction('YOUR TURN: Select a Piece');
+                }
+            }
+        }
+
+        // Handle square hover for skill highlights
+        function handleSquareHover(square) {
+            if (!isCastingSkill || activeSkill !== 'layoff') return;
+
+            // Clear previous layoff highlights
+            document.querySelectorAll('.layoff-highlight').forEach(el => el.classList.remove('layoff-highlight'));
+
+            // Get 2x2 grid
+            const col = square.charCodeAt(0) - 97;
+            const row = parseInt(square[1]);
+
+            for (let r = row; r > row - 2 && r >= 1; r--) {
+                for (let c = col; c < col + 2 && c < 8; c++) {
+                    const targetSquare = String.fromCharCode(97 + c) + r;
+                    const element = document.querySelector(`[data-square="${targetSquare}"]`);
+                    if (element) {
+                        element.classList.add('layoff-highlight');
+                    }
+                }
+            }
+        }
+
+        // Handle square leave
+        function handleSquareLeave(square) {
+            if (activeSkill !== 'layoff') return;
+            document.querySelectorAll('.layoff-highlight').forEach(el => el.classList.remove('layoff-highlight'));
+        }
+
+        // Handle skill-specific clicks
+        function handleSkillClick(square) {
+            console.log('handleSkillClick called, activeSkill:', activeSkill, 'square:', square);
+            switch (activeSkill) {
+                case 'layoff':
+                    executeLayoffSkill(square);
+                    break;
+                case 'fsd':
+                    executeFSDSkill(square);
+                    break;
+                case 'hallucination':
+                    executeHallucinationSkill(square);
+                    break;
+                case 'gpu':
+                    // GPU is instant, no click handling needed
+                    break;
+                default:
+                    console.log('No active skill to execute');
+            }
+        }
+
+        // Make a move
+        function makeMove(from, to) {
+            console.log('=== makeMove Called ===');
+            console.log('from:', from, 'to:', to);
+            console.log('isPlayerTurn:', isPlayerTurn);
+            console.log('game.turn():', game.turn());
+
+            // Ensure it's player's turn
+            if (!isPlayerTurn) {
+                console.error('Cannot move: not player turn');
+                return;
+            }
+
+            // Ensure moving white piece
+            const piece = game.get(from);
+            if (!piece || piece.color !== 'w') {
+                console.error('Cannot move: not your piece');
+                return;
+            }
+
+            let move;
+            // Handle GPU Rental extra turn: game.turn() is black but it's still player's turn
+            if (game.turn() !== 'w' && isPlayerTurn) {
+                console.log('GPU Rental extra turn: temporarily modifying FEN to execute move');
+                const fen = game.fen();
+                const parts = fen.split(' ');
+                parts[1] = 'w';
+                game.load(parts.join(' '));
+                move = game.move({ from, to });
+                // Restore FEN (the move will have changed it to black again)
+                console.log('Move executed, FEN:', game.fen());
+            } else {
+                move = game.move({ from, to });
+            }
+
+            if (move) {
+                console.log('Player move successful:', move, 'game.turn() after move:', game.turn(), 'hasGPURental:', hasGPURental);
+                addFeedEntry(`Player moves ${move.piece} from ${from} to ${to}`, 'player');
+                selectedSquare = null;
+                gameState = GameState.IDLE;
+                isCastingSkill = false;
+                activeSkill = null;
+                renderBoard();
+                clearSkillHighlights();
+
+                // Check for game over
+                if (game.game_over()) {
+                    handleGameOver();
+                    return;
+                }
+
+                // Check if player has GPU Rental (extra turn)
+                if (hasGPURental) {
+                    console.log('=== GPU Rental Extra Turn ===');
+                    console.log('Player has GPU Rental, getting extra turn');
+                    console.log('game.turn():', game.turn());
+                    hasGPURental = false; // Consume the extra turn
+
+                    // DON'T switch turn back - keep it as black's turn
+                    // We'll handle this in handleSquareClick by checking isPlayerTurn instead of game.turn()
+                    console.log('Keeping game.turn() as black for GPU Rental extra turn');
+
+                    updateInstruction('GPU RENTAL: You still have your turn! Move another piece.');
+                    addFeedEntry('GPU Rental: You get another move!', 'skill');
+                    // Don't call endPlayerTurn(), player keeps turn
+                    console.log('GPU Rental extra turn setup complete');
+                } else {
+                    // End player turn (this will process hallucinations and switch to AI)
+                    endPlayerTurn();
+                }
+            } else {
+                console.error('Invalid move:', from, '->', to);
+            }
+        }
+
+        // Layoff Storm Skill
+        function activateLayoffSkill() {
+            if (playerEnergy < 3 || !isPlayerTurn) return;
+
+            isCastingSkill = true;
+            activeSkill = 'layoff';
+            gameState = GameState.SKILL_LAYOFF_PENDING;
+            playerEnergy -= 3;
+            updateEnergyDisplay();
+            updateInstruction('LAYOFF MODE: Click to delete 2x2 area');
+            addFeedEntry('Player activates LAYOFF STORM! (3E)', 'skill');
+
+            document.getElementById('layoffBtn').classList.add('active');
+        }
+
+        function executeLayoffSkill(square) {
+            console.log('executeLayoffSkill called, square:', square);
+            const col = square.charCodeAt(0) - 97;
+            const row = parseInt(square[1]);
+            let deletedPieces = [];
+            let skippedKings = [];
+
+            // Delete pieces in 2x2 grid
+            for (let r = row; r > row - 2 && r >= 1; r--) {
+                for (let c = col; c < col + 2 && c < 8; c++) {
+                    const targetSquare = String.fromCharCode(97 + c) + r;
+                    const piece = game.get(targetSquare);
+                    if (piece) {
+                        // Skip kings - Layoff Storm cannot remove kings
+                        if (piece.type === 'k') {
+                            skippedKings.push(`${piece.color === 'w' ? 'White' : 'Black'} KING at ${targetSquare}`);
+                            continue;
+                        }
+
+                        // Remove from hallucinations if it was hallucinated
+                        hallucinations = hallucinations.filter(h => h.square !== targetSquare);
+
+                        // Store piece info before removal
+                        const pieceInfo = `${piece.color === 'w' ? 'White' : 'Black'} ${piece.type.toUpperCase()} at ${targetSquare}`;
+
+                        // Remove the piece (excluding kings)
+                        const removed = game.remove(targetSquare);
+
+                        if (removed) {
+                            deletedPieces.push(pieceInfo);
+                        }
+                    }
+                }
+            }
+
+            if (deletedPieces.length > 0) {
+                addFeedEntry(`Layoff Storm deleted: ${deletedPieces.join(', ')}`, 'skill');
+            } else {
+                addFeedEntry(`Layoff Storm: No pieces in selected area`, 'skill');
+            }
+
+            if (skippedKings.length > 0) {
+                addFeedEntry(`Layoff Storm cannot remove Kings! Skipped: ${skippedKings.join(', ')}`, 'skill');
+            }
+
+            console.log('Layoff Storm complete, game.turn():', game.turn());
+
+            // Switch turn manually since we didn't use game.move()
+            switchTurn();
+            console.log('After turn switch, game.turn():', game.turn());
+
+            console.log('Layoff Storm complete, calling endPlayerTurn');
+            endPlayerTurn();
+        }
+
+        // FSD Mode Skill
+        function activateFSDSkill() {
+            if (playerEnergy < 2 || !isPlayerTurn) return;
+
+            isCastingSkill = true;
+            activeSkill = 'fsd';
+            gameState = GameState.SKILL_FSD_SELECT_PIECE;
+            playerEnergy -= 2;
+            updateEnergyDisplay();
+            updateInstruction('FSD MODE: Select your piece to teleport');
+            addFeedEntry('Player activates FSD MODE! (2E)', 'skill');
+
+            document.getElementById('fsdBtn').classList.add('active');
+        }
+
+        function executeFSDSkill(square) {
+            console.log('executeFSDSkill called, square:', square, 'gameState:', gameState);
+            const piece = game.get(square);
+
+            if (gameState === GameState.SKILL_FSD_SELECT_PIECE) {
+                // Select piece to teleport - must be white piece
+                if (piece && piece.color === 'w') {
+                    selectedSquare = square;
+                    gameState = GameState.SKILL_FSD_SELECT_TARGET;
+                    updateInstruction('FSD MODE: Select empty square to teleport to');
+
+                    // Highlight all empty squares
+                    for (let row = 0; row < 8; row++) {
+                        for (let col = 0; col < 8; col++) {
+                            const squareName = String.fromCharCode(97 + col) + (8 - row);
+                            if (!game.get(squareName)) {
+                                const element = document.querySelector(`[data-square="${squareName}"]`);
+                                if (element) {
+                                    element.classList.add('fsd-teleport');
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Not your piece, cancel skill
+                    console.log('FSD cancelled: not your piece');
+                    isCastingSkill = false;
+                    activeSkill = null;
+                    gameState = GameState.IDLE;
+                    selectedSquare = null;
+                    clearSkillHighlights();
+                    renderBoard();
+                    updateInstruction('FSD cancelled. Select your piece to teleport.');
+                }
+            } else if (gameState === GameState.SKILL_FSD_SELECT_TARGET) {
+                // Teleport to empty square
+                if (!game.get(square) && selectedSquare) {
+                    const piece = game.get(selectedSquare);
+                    console.log('FSD teleporting piece:', piece.type, 'from', selectedSquare, 'to', square);
+                    game.remove(selectedSquare);
+                    game.put(piece, square);
+                    addFeedEntry(`FSD Mode teleported ${piece.type} from ${selectedSquare} to ${square}`, 'skill');
+                    console.log('FSD teleport complete, game.turn():', game.turn());
+
+                    // Switch turn manually since we didn't use game.move()
+                    switchTurn();
+                    console.log('After turn switch, game.turn():', game.turn());
+
+                    console.log('FSD teleport complete, calling endPlayerTurn');
+                    endPlayerTurn();
+                } else {
+                    console.log('FSD invalid target: not empty square');
+                }
+            }
+        }
+
+        // Hallucination Skill
+        function activateHallucinationSkill() {
+            if (playerEnergy < 2 || !isPlayerTurn) return;
+
+            isCastingSkill = true;
+            activeSkill = 'hallucination';
+            gameState = GameState.SKILL_HALLUCINATION_SELECT_TARGET;
+            playerEnergy -= 2;
+            updateEnergyDisplay();
+            updateInstruction('HALLUCINATION: Select enemy major piece (Rook/Knight/Bishop)');
+            addFeedEntry('Player activates HALLUCINATION! (2E)', 'skill');
+
+            document.getElementById('hallucinationBtn').classList.add('active');
+            renderBoard();
+        }
+
+        function executeHallucinationSkill(square) {
+            console.log('executeHallucinationSkill called, square:', square);
+            const piece = game.get(square);
+
+            // Must be enemy major piece (Rook, Knight, or Bishop)
+            if (piece && piece.color === 'b' && ['r', 'n', 'b'].includes(piece.type)) {
+                // Store original piece info
+                hallucinations.push({
+                    square: square,
+                    originalType: piece.type,
+                    turnsRemaining: 2
+                });
+
+                // Replace with pawn
+                game.remove(square);
+                game.put({ type: 'p', color: 'b' }, square);
+
+                addFeedEntry(`Hallucination: Enemy ${piece.type.toUpperCase()} at ${square} is now a PAWN for 2 turns!`, 'skill');
+                console.log('Hallucination complete, game.turn():', game.turn());
+
+                // Switch turn manually since we didn't use game.move()
+                switchTurn();
+                console.log('After turn switch, game.turn():', game.turn());
+
+                console.log('Hallucination complete, calling endPlayerTurn');
+                endPlayerTurn();
+            } else {
+                // Invalid target, cancel skill
+                console.log('Hallucination cancelled: invalid target');
+                isCastingSkill = false;
+                activeSkill = null;
+                gameState = GameState.IDLE;
+                selectedSquare = null;
+                clearSkillHighlights();
+                renderBoard();
+                updateInstruction('Hallucination cancelled. Select enemy major piece (Rook/Knight/Bishop).');
+            }
+        }
+
+        // GPU Rental Skill
+        function activateGPUSkill() {
+            if (playerEnergy < 5 || !isPlayerTurn) return;
+
+            playerEnergy -= 5;
+            hasGPURental = true; // Mark that player has extra turn
+            updateEnergyDisplay();
+            addFeedEntry('Player uses GPU RENTAL! Extra turn! (5E)', 'skill');
+            updateInstruction('GPU RENTAL: You get another turn! Select a piece to move.');
+
+            // Player keeps turn, just reset state
+            selectedSquare = null;
+            gameState = GameState.IDLE;
+            isCastingSkill = false;
+            activeSkill = null;
+            renderBoard();
+            clearSkillHighlights();
+
+            console.log('GPU Rental activated, hasGPURental set to true');
+        }
+
+        // Clear skill highlights
+        function clearSkillHighlights() {
+            document.querySelectorAll('.layoff-highlight, .fsd-teleport, .hallucination-target').forEach(el => {
+                el.classList.remove('layoff-highlight', 'fsd-teleport', 'hallucination-target');
+            });
+            document.querySelectorAll('.skill-btn').forEach(btn => btn.classList.remove('active'));
+        }
+
+        // End player turn
+        function endPlayerTurn() {
+            console.log('=== endPlayerTurn Called ===');
+            console.log('game.turn() before:', game.turn());
+            console.log('isPlayerTurn before:', isPlayerTurn);
+
+            selectedSquare = null;
+            gameState = GameState.IDLE;
+            isCastingSkill = false;
+            activeSkill = null;
+            renderBoard();
+            clearSkillHighlights();
+
+            // Process hallucination recovery at end of player turn
+            processHallucinations();
+
+            // Check if king has been captured
+            const kingCaptured = checkKingCaptured();
+            if (kingCaptured) {
+                console.log('King captured, ending game');
+                handleGameOver();
+                return;
+            }
+
+            if (game.game_over()) {
+                console.log('Game over detected');
+                handleGameOver();
+                return;
+            }
+
+            // Ensure game state is correct - should be black's turn now
+            console.log('game.turn() after checks:', game.turn());
+            if (game.turn() !== 'b') {
+                console.error('ERROR: Game state error! Expected black\'s turn but got', game.turn());
+                console.error('This means the skill execution did not properly switch turns.');
+                console.error('Current FEN:', game.fen());
+                debugGameState();
+
+                // Try to fix by forcing a move that doesn't change anything
+                console.log('Attempting to fix game state...');
+                return;
+            }
+
+            isPlayerTurn = false;
+            updateInstruction('AI THINKING...');
+            console.log('AI turn starting immediately');
+            aiTurn();
+        }
+
+        // Process hallucination recovery
+        function processHallucinations() {
+            console.log('Processing hallucinations:', hallucinations.length);
+            hallucinations = hallucinations.filter(h => {
+                h.turnsRemaining--;
+
+                if (h.turnsRemaining <= 0) {
+                    console.log('Hallucination expired for:', h.square);
+                    // Revert to original piece
+                    const currentPiece = game.get(h.square);
+                    if (currentPiece && currentPiece.type === 'p' && currentPiece.color === 'b') {
+                        game.remove(h.square);
+                        game.put({ type: h.originalType, color: 'b' }, h.square);
+                        addFeedEntry(`Hallucination expired: Enemy ${h.originalType.toUpperCase()} restored at ${h.square}!`, 'skill');
+                    }
+                    return false;
+                }
+                return true;
+            });
+            renderBoard();
+        }
+
+        // AI Turn - Weighted Greedy Algorithm
+        function aiTurn() {
+            console.log('=== AI Turn Started ===');
+            console.log('isPlayerTurn:', isPlayerTurn);
+            console.log('game.turn():', game.turn());
+            console.log('gameState:', gameState);
+            console.log('FEN:', game.fen());
+
+            if (game.game_over()) {
+                console.log('Game over detected, skipping AI turn');
+                return;
+            }
+
+            // Ensure it's black's turn
+            if (game.turn() !== 'b') {
+                console.error('ERROR: AI turn called but it\'s not black\'s turn! Current turn:', game.turn());
+                console.error('This should not happen. Debug info:');
+                debugGameState();
+                return;
+            }
+
+            // Get only black (AI) moves
+            const moves = game.moves({ verbose: true });
+            console.log('AI available moves:', moves.length);
+            if (moves.length === 0) {
+                console.log('No moves available for AI');
+                handleGameOver();
+                return;
+            }
+
+            // Evaluate each move
+            let bestMove = null;
+            let bestScore = -Infinity;
+
+            moves.forEach(move => {
+                let score = 0;
+
+                // Capture bonus
+                if (move.captured) {
+                    score += pieceValues[move.captured] * 10;
+                }
+
+                // Check bonus
+                if (move.san.includes('+')) {
+                    score += 50;
+                }
+
+                // Checkmate bonus
+                if (move.san.includes('#')) {
+                    score += 10000;
+                }
+
+                // Promotion bonus
+                if (move.promotion) {
+                    score += pieceValues[move.promotion] * 8;
+                }
+
+                // Center control bonus
+                const centerSquares = ['d4', 'd5', 'e4', 'e5'];
+                if (centerSquares.includes(move.to)) {
+                    score += 10;
+                }
+
+                // Piece development bonus (knights and bishops moving from back rank)
+                const fromRank = parseInt(move.from[1]);
+                if (['n', 'b'].includes(move.piece) && fromRank <= 2) {
+                    score += 15;
+                }
+
+                // Random factor for variety
+                score += Math.random() * 5;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = move;
+                }
+            });
+
+            // Execute best move
+            console.log('AI selected move:', bestMove.san, 'from:', bestMove.from, 'to:', bestMove.to, 'piece:', bestMove.piece);
+
+            // Verify the piece being moved is black
+            const pieceToMove = game.get(bestMove.from);
+            if (!pieceToMove || pieceToMove.color !== 'b') {
+                console.error('ERROR: AI trying to move non-black piece! Piece:', pieceToMove);
+                return;
+            }
+
+            const moveResult = game.move(bestMove.san);
+            if (!moveResult) {
+                console.error('ERROR: AI move failed:', bestMove.san);
+                return;
+            }
+            console.log('AI move successful:', moveResult);
+            addFeedEntry(`AI moves: ${bestMove.san}`, 'ai');
+
+            // Check if king has been captured
+            const kingCaptured = checkKingCaptured();
+            if (kingCaptured) {
+                handleGameOver();
+                return;
+            }
+
+            // Check for game over
+            if (game.game_over()) {
+                handleGameOver();
+                return;
+            }
+
+            // Switch to player turn
+            isPlayerTurn = true;
+            playerTurnCount++;
+            playerEnergy = Math.min(playerEnergy + 1, 10);
+
+            // Ensure all states are reset
+            selectedSquare = null;
+            gameState = GameState.IDLE;
+            isCastingSkill = false;
+            activeSkill = null;
+
+            updateEnergyDisplay();
+            updateInstruction('YOUR TURN: Select a Piece');
+            renderBoard();
+        }
+
+        // Update energy display
+        function updateEnergyDisplay() {
+            const energyBar = document.getElementById('energyBar');
+            const energyText = document.getElementById('energyText');
+            const percentage = (playerEnergy / 10) * 100;
+
+            energyBar.style.width = percentage + '%';
+            energyText.textContent = `${playerEnergy} / 10`;
+
+            // Update skill button states
+            document.getElementById('layoffBtn').disabled = playerEnergy < 3 || !isPlayerTurn;
+            document.getElementById('fsdBtn').disabled = playerEnergy < 2 || !isPlayerTurn;
+            document.getElementById('hallucinationBtn').disabled = playerEnergy < 2 || !isPlayerTurn;
+            document.getElementById('gpuBtn').disabled = playerEnergy < 5 || !isPlayerTurn;
+        }
+
+        // Update instruction box
+        function updateInstruction(text) {
+            document.getElementById('instructionBox').innerHTML = text;
+        }
+
+        // Add entry to X-Feed
+        function addFeedEntry(text, type = '') {
+            const feed = document.getElementById('xFeed');
+            const entry = document.createElement('div');
+            entry.className = `feed-item ${type}`;
+            entry.textContent = text;
+            feed.insertBefore(entry, feed.firstChild);
+
+            // Keep only last 50 entries
+            while (feed.children.length > 50) {
+                feed.removeChild(feed.lastChild);
+            }
+        }
+
+        // Function to manually switch turn
+        function switchTurn() {
+            const fen = game.fen();
+            const parts = fen.split(' ');
+            const oldTurn = parts[1];
+            parts[1] = parts[1] === 'w' ? 'b' : 'w';
+            game.load(parts.join(' '));
+            console.log('Turn switched from', oldTurn, 'to', parts[1]);
+        }
+
+// Debug function to print game state
+        function debugGameState() {
+            console.log('=== Game State Debug ===');
+            console.log('isPlayerTurn:', isPlayerTurn);
+            console.log('game.turn():', game.turn());
+            console.log('gameState:', gameState);
+            console.log('isCastingSkill:', isCastingSkill);
+            console.log('activeSkill:', activeSkill);
+            console.log('selectedSquare:', selectedSquare);
+            console.log('playerEnergy:', playerEnergy);
+            console.log('hasGPURental:', hasGPURental);
+            console.log('FEN:', game.fen());
+            console.log('========================');
+        }
+
+// Check if king has been captured
+        function checkKingCaptured() {
+            const board = game.board();
+            let whiteKing = false;
+            let blackKing = false;
+
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = board[row][col];
+                    if (piece && piece.type === 'k') {
+                        if (piece.color === 'w') {
+                            whiteKing = true;
+                        } else {
+                            blackKing = true;
+                        }
+                    }
+                }
+            }
+
+            if (!whiteKing) {
+                return 'black'; // Black wins, white king captured
+            } else if (!blackKing) {
+                return 'white'; // White wins, black king captured
+            }
+            return null; // Both kings present
+        }
+
+        // Handle game over
+        function handleGameOver() {
+            const overlay = document.getElementById('gameOverOverlay');
+            const title = document.getElementById('gameOverTitle');
+            const message = document.getElementById('gameOverMessage');
+
+            overlay.classList.add('show');
+
+            // Check if king has been captured
+            const kingCaptured = checkKingCaptured();
+            if (kingCaptured) {
+                if (kingCaptured === 'white') {
+                    title.textContent = 'YOU WIN!';
+                    title.className = 'game-over-title win';
+                    message.textContent = 'You captured the enemy king! Victory!';
+                } else {
+                    title.textContent = 'AI WINS';
+                    title.className = 'game-over-title lose';
+                    message.textContent = 'The AI captured your king! Defeat!';
+                }
+                return;
+            }
+
+            // Standard chess game over conditions
+            if (game.in_checkmate()) {
+                if (game.turn() === 'w') {
+                    title.textContent = 'CHECKMATE - AI WINS';
+                    title.className = 'game-over-title lose';
+                    message.textContent = 'The AI has checkmated your king. Game over.';
+                } else {
+                    title.textContent = 'CHECKMATE - YOU WIN!';
+                    title.className = 'game-over-title win';
+                    message.textContent = 'Congratulations! You have checkmated the AI.';
+                }
+            } else if (game.in_draw()) {
+                title.textContent = 'DRAW';
+                title.className = 'game-over-title';
+                message.textContent = 'The game is a draw.';
+            } else if (game.in_stalemate()) {
+                title.textContent = 'STALEMATE';
+                title.className = 'game-over-title';
+                message.textContent = 'Stalemate - no legal moves available.';
+            }
+        }
+
+        // Restart game
+        function restartGame() {
+            game = new Chess();
+            gameState = GameState.IDLE;
+            selectedSquare = null;
+            playerEnergy = 0;
+            isPlayerTurn = true;
+            isCastingSkill = false;
+            activeSkill = null;
+            hasGPURental = false;
+            hallucinations = [];
+            playerTurnCount = 0;
+
+            document.getElementById('gameOverOverlay').classList.remove('show');
+            document.getElementById('xFeed').innerHTML = '<div class="feed-item">🚀 Game restarted. Good luck!</div>';
+
+            initializeBoard();
+            updateEnergyDisplay();
+            updateInstruction('YOUR TURN: Select a Piece');
+        }
+
+        // Initialize game on load
+        window.onload = function() {
+            initializeBoard();
+            updateEnergyDisplay();
+
+            // Add keyboard listener for debugging
+            document.addEventListener('keydown', function(e) {
+                // Press 'D' to show debug info
+                if (e.key === 'd' || e.key === 'D') {
+                    debugGameState();
+                }
+            });
+        };
+    </script>
+</body>
+</html>
